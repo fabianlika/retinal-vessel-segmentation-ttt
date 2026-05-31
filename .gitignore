@@ -1,0 +1,44 @@
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ── Virtual environments ─────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ── IDE / editor ─────────────────────────────────────────────────────────────
+.vs/
+.vscode/
+.idea/
+
+# ── Logs & temp files ────────────────────────────────────────────────────────
+*.log
+err.txt
+app_out.log
+app_err.log
+
+# ── TensorBoard runs ─────────────────────────────────────────────────────────
+runs/
+
+# ── Colab build artifacts (regenerated locally; do not version) ──────────────
+# colab_package/ is a duplicate of the code + data + checkpoint used only to
+# build the upload zip. The evaluation notebook itself is kept in notebooks/.
+colab_package/
+colab_package.zip
+
+# Temporary CLAHE-corrected datasets produced by the notebook at runtime
+data/*_clahe/
+
+# ── Datasets (research-licensed; not redistributed) ─────────────────────────
+data/**/images/
+data/**/masks/
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+Thumbs.db
+.DS_Store

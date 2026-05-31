@@ -1,0 +1,5 @@
+# ── Git LFS tracking ─────────────────────────────────────────────────────────
+# Large binary assets are stored via Git LFS to keep the repo lightweight.
+
+# Model checkpoints
+*.pth filter=lfs diff=lfs merge=lfs -text

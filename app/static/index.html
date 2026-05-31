@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Retinal Vessel Segmentation — TTT Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1a1d2e 0%, #16213e 100%);
+      border-bottom: 1px solid #2d3748;
+      padding: 1.5rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    header .dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #48bb78;
+      box-shadow: 0 0 8px #48bb78;
+    }
+
+    header h1 { font-size: 1.25rem; font-weight: 600; }
+    header p  { font-size: 0.85rem; color: #718096; margin-top: 0.15rem; }
+
+    main {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+    }
+
+    /* Upload card */
+    .upload-card {
+      background: #1a1d2e;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .upload-card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1.25rem; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .upload-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    @media (max-width: 640px) { .upload-row { grid-template-columns: 1fr; } }
+
+    .file-label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      border: 2px dashed #2d3748;
+      border-radius: 10px;
+      padding: 1.5rem;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      text-align: center;
+    }
+
+    .file-label:hover { border-color: #48bb78; background: rgba(72,187,120,0.05); }
+    .file-label.has-file { border-color: #48bb78; background: rgba(72,187,120,0.08); }
+
+    .file-label svg { width: 32px; height: 32px; opacity: 0.5; }
+    .file-label span { font-size: 0.9rem; color: #718096; }
+    .file-label small { font-size: 0.75rem; color: #4a5568; }
+    .file-label input { display: none; }
+
+    .btn-predict {
+      width: 100%;
+      padding: 0.85rem;
+      background: #48bb78;
+      color: #0f1117;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+
+    .btn-predict:hover:not(:disabled) { background: #38a169; }
+    .btn-predict:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Spinner */
+    .spinner {
+      display: none;
+      width: 18px; height: 18px;
+      border: 3px solid transparent;
+      border-top-color: #0f1117;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results */
+    #results { display: none; }
+
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+
+    .results-header h2 { font-size: 1.1rem; font-weight: 600; }
+
+    .device-badge {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.65rem;
+      border-radius: 999px;
+      background: #2d3748;
+      color: #a0aec0;
+    }
+
+    /* Image grid */
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 768px) { .image-grid { grid-template-columns: 1fr; } }
+
+    .img-card {
+      background: #1a1d2e;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .img-card .img-title {
+      padding: 0.75rem 1rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #a0aec0;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    .img-canvas-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      background: #0f1117;
+    }
+
+    .img-canvas-wrap img,
+    .img-canvas-wrap canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: contain;
+    }
+
+    /* Metrics table */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 640px) { .metrics-grid { grid-template-columns: 1fr; } }
+
+    .metrics-card {
+      background: #1a1d2e;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .metrics-card .card-title {
+      padding: 0.75rem 1rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    .metrics-card.baseline .card-title { color: #63b3ed; }
+    .metrics-card.ttt     .card-title { color: #68d391; }
+
+    .metrics-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .metrics-table td {
+      padding: 0.6rem 1rem;
+      font-size: 0.88rem;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    .metrics-table td:last-child { text-align: right; font-weight: 600; }
+    .metrics-table tr:last-child td { border-bottom: none; }
+
+    .delta-positive { color: #68d391; }
+    .delta-negative { color: #fc8181; }
+    .delta-neutral  { color: #a0aec0; }
+
+    /* No-metrics notice */
+    .no-metrics {
+      padding: 1rem;
+      font-size: 0.85rem;
+      color: #4a5568;
+      text-align: center;
+    }
+
+    /* Error banner */
+    .error-banner {
+      display: none;
+      background: rgba(245,101,101,0.12);
+      border: 1px solid #fc8181;
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      color: #fc8181;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="dot"></div>
+  </div>
+  <div>
+    <h1>Retinal Vessel Segmentation</h1>
+    <p>U-Net + Test-Time Adaptation (TTT) via rotation prediction</p>
+  </div>
+</header>
+
+<main>
+
+  <!-- Upload card -->
+  <div class="upload-card">
+    <h2>Upload Image</h2>
+    <div class="upload-row">
+
+      <label class="file-label" id="img-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <path d="M21 15l-5-5L5 21"/>
+        </svg>
+        <span id="img-name">Fundus image</span>
+        <small>PNG / JPG / TIFF</small>
+        <input type="file" id="img-input" accept="image/*" />
+      </label>
+
+      <label class="file-label" id="mask-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+        <span id="mask-name">Ground truth mask</span>
+        <small>Optional — enables metrics</small>
+        <input type="file" id="mask-input" accept="image/*" />
+      </label>
+
+    </div>
+
+    <label class="normalize-row" for="normalize-input" style="display:flex;align-items:center;gap:10px;margin:18px 2px 4px;color:#cbd5e0;font-size:0.92rem;cursor:pointer;">
+      <input type="checkbox" id="normalize-input" style="width:16px;height:16px;accent-color:#48bb78;cursor:pointer;" />
+      <span>Normalize intensity (CLAHE) — recommended for dark / low-contrast images</span>
+    </label>
+
+    <div class="error-banner" id="error-banner"></div>
+
+    <button class="btn-predict" id="predict-btn" disabled onclick="runPredict()">
+      <span id="btn-text">Run Segmentation</span>
+      <div class="spinner" id="spinner"></div>
+    </button>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+
+    <div class="results-header">
+      <h2>Results</h2>
+      <span class="device-badge" id="device-badge">cpu</span>
+    </div>
+
+    <!-- Image visualizations -->
+    <div class="image-grid">
+      <div class="img-card">
+        <div class="img-title">Original</div>
+        <div class="img-canvas-wrap">
+          <img id="orig-img" src="" alt="Original fundus image" />
+        </div>
+      </div>
+      <div class="img-card">
+        <div class="img-title">Baseline segmentation</div>
+        <div class="img-canvas-wrap">
+          <img id="orig-img-b" src="" alt="" />
+          <img id="baseline-overlay" src="" alt="Baseline vessel overlay" />
+        </div>
+      </div>
+      <div class="img-card">
+        <div class="img-title">TTT segmentation</div>
+        <div class="img-canvas-wrap">
+          <img id="orig-img-t" src="" alt="" />
+          <img id="ttt-overlay" src="" alt="TTT vessel overlay" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="metrics-grid" id="metrics-section">
+      <div class="metrics-card baseline">
+        <div class="card-title">Baseline Metrics</div>
+        <table class="metrics-table" id="baseline-table"></table>
+      </div>
+      <div class="metrics-card ttt">
+        <div class="card-title">TTT Metrics</div>
+        <table class="metrics-table" id="ttt-table"></table>
+      </div>
+    </div>
+
+    <div class="no-metrics" id="no-metrics-notice" style="display:none;">
+      Upload a ground truth mask to see per-image metrics.
+    </div>
+
+  </div>
+</main>
+
+<script>
+  const imgInput  = document.getElementById('img-input');
+  const maskInput = document.getElementById('mask-input');
+  const predictBtn = document.getElementById('predict-btn');
+
+  imgInput.addEventListener('change', () => {
+    const f = imgInput.files[0];
+    if (f) {
+      document.getElementById('img-name').textContent = f.name;
+      document.getElementById('img-label').classList.add('has-file');
+      predictBtn.disabled = false;
+    }
+  });
+
+  maskInput.addEventListener('change', () => {
+    const f = maskInput.files[0];
+    if (f) {
+      document.getElementById('mask-name').textContent = f.name;
+      document.getElementById('mask-label').classList.add('has-file');
+    }
+  });
+
+  function showError(msg) {
+    const banner = document.getElementById('error-banner');
+    banner.textContent = msg;
+    banner.style.display = 'block';
+  }
+
+  function hideError() {
+    document.getElementById('error-banner').style.display = 'none';
+  }
+
+  function setLoading(on) {
+    document.getElementById('btn-text').style.display = on ? 'none' : 'inline';
+    document.getElementById('spinner').style.display  = on ? 'block' : 'none';
+    predictBtn.disabled = on;
+  }
+
+  const METRIC_LABELS = {
+    dice:        'Dice (F1)',
+    iou:         'IoU (Jaccard)',
+    accuracy:    'Accuracy',
+    sensitivity: 'Sensitivity',
+    specificity: 'Specificity',
+    auc_roc:     'AUC-ROC',
+  };
+
+  function fillTable(tableEl, metrics) {
+    tableEl.innerHTML = '';
+    for (const [key, label] of Object.entries(METRIC_LABELS)) {
+      const val = metrics[key];
+      const row = document.createElement('tr');
+      row.innerHTML = `<td>${label}</td><td>${val !== null && val !== undefined ? val.toFixed(4) : '—'}</td>`;
+      tableEl.appendChild(row);
+    }
+  }
+
+  function fillDeltaTable(tableEl, baseline, ttt) {
+    tableEl.innerHTML = '';
+    for (const [key, label] of Object.entries(METRIC_LABELS)) {
+      const b = baseline[key], t = ttt[key];
+      if (b === null || t === null) continue;
+      const delta = t - b;
+      const sign  = delta > 0 ? '+' : '';
+      const cls   = delta > 0.0001 ? 'delta-positive' : delta < -0.0001 ? 'delta-negative' : 'delta-neutral';
+      const row = document.createElement('tr');
+      row.innerHTML = `<td>${label}</td><td>${t.toFixed(4)} <span class="${cls}">(${sign}${delta.toFixed(4)})</span></td>`;
+      tableEl.appendChild(row);
+    }
+  }
+
+  async function runPredict() {
+    hideError();
+    setLoading(true);
+    document.getElementById('results').style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('image', imgInput.files[0]);
+    if (maskInput.files[0]) formData.append('mask', maskInput.files[0]);
+    if (document.getElementById('normalize-input').checked) {
+      formData.append('normalize', '1');
+    }
+
+    try {
+      const resp = await fetch('/predict', { method: 'POST', body: formData });
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || err.detail || `Server error ${resp.status}`);
+      }
+      const data = await resp.json();
+
+      // Images
+      document.getElementById('orig-img').src   = 'data:image/png;base64,' + data.original_image;
+      document.getElementById('orig-img-b').src  = 'data:image/png;base64,' + data.original_image;
+      document.getElementById('orig-img-t').src  = 'data:image/png;base64,' + data.original_image;
+      document.getElementById('baseline-overlay').src = 'data:image/png;base64,' + data.baseline_overlay;
+      document.getElementById('ttt-overlay').src      = 'data:image/png;base64,' + data.ttt_overlay;
+
+      // Device badge
+      document.getElementById('device-badge').textContent = data.device;
+
+      // Metrics
+      const metricsSection = document.getElementById('metrics-section');
+      const noMetricsNotice = document.getElementById('no-metrics-notice');
+
+      if (data.baseline_metrics && data.ttt_metrics) {
+        fillTable(document.getElementById('baseline-table'), data.baseline_metrics);
+        fillDeltaTable(document.getElementById('ttt-table'), data.baseline_metrics, data.ttt_metrics);
+        metricsSection.style.display = 'grid';
+        noMetricsNotice.style.display = 'none';
+      } else {
+        metricsSection.style.display = 'none';
+        noMetricsNotice.style.display = 'block';
+      }
+
+      document.getElementById('results').style.display = 'block';
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      setLoading(false);
+      predictBtn.disabled = false;
+    }
+  }
+</script>
+
+</body>
+</html>
