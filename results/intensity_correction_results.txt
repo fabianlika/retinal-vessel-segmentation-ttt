@@ -1,0 +1,15 @@
+Intensity Correction (CLAHE) — Dice by condition
+Dataset  Condition             Dice     IoU    Sens    Spec
+----------------------------------------------------------
+STARE    Baseline (orig)     0.4187  0.2648  0.3373  0.9775
+STARE    TTA (orig)          0.4342  0.2773  0.3415  0.9810
+STARE    Baseline (CLAHE)    0.4706  0.3077  0.5611  0.9323
+STARE    TTA (CLAHE)         0.4993  0.3327  0.5878  0.9369
+CHASE    Baseline (orig)     0.0332  0.0169  0.0172  0.9986
+CHASE    TTA (orig)          0.0216  0.0109  0.0111  0.9989
+CHASE    Baseline (CLAHE)    0.3571  0.2173  0.2618  0.9847
+CHASE    TTA (CLAHE)         0.3781  0.2331  0.2695  0.9883
+HRF      Baseline (orig)     0.4402  0.2822  0.3721  0.9734
+HRF      TTA (orig)          0.4662  0.3039  0.3894  0.9765
+HRF      Baseline (CLAHE)    0.4363  0.2790  0.6945  0.8757
+HRF      TTA (CLAHE)         0.4520  0.2920  0.7251  0.8761

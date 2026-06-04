@@ -1,0 +1,18 @@
+Retinal Vessel Segmentation — Evaluation Results
+TTT settings: lr=1e-06, steps=5
+
+=== STARE (20 images) ===
+  Baseline: dice=0.4187 iou=0.2648 sensitivity=0.3373 specificity=0.9775 auc_roc=0.6574
+  TTT: dice=0.4192 iou=0.2652 sensitivity=0.3371 specificity=0.9777 auc_roc=0.6574
+  TTT delta (Dice): +0.0005
+
+=== CHASE (28 images) ===
+  Baseline: dice=0.0332 iou=0.0169 sensitivity=0.0172 specificity=0.9986 auc_roc=0.5079
+  TTT: dice=0.0334 iou=0.0170 sensitivity=0.0173 specificity=0.9986 auc_roc=0.5079
+  TTT delta (Dice): +0.0002
+
+=== HRF (45 images) ===
+  Baseline: dice=0.4402 iou=0.2822 sensitivity=0.3721 specificity=0.9734 auc_roc=0.6727
+  TTT: dice=0.4416 iou=0.2834 sensitivity=0.3724 specificity=0.9738 auc_roc=0.6731
+  TTT delta (Dice): +0.0014
+
