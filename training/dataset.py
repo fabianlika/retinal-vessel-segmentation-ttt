@@ -150,17 +150,34 @@ def get_drive_loaders(
     val_split: float = 0.2,
 ) -> Tuple[DataLoader, DataLoader]:
     """Return (train_loader, val_loader) for the DRIVE dataset."""
-    ds = RetinalDataset(
+    # Two separate dataset instances over the same files: the training view
+    # has augmentation enabled, the validation view does not. Using one shared
+    # object and toggling `.augment` would change BOTH subsets (random_split's
+    # Subsets wrap the same underlying dataset), so we keep them independent.
+    train_full = RetinalDataset(
         image_dir=os.path.join(data_root, "images"),
         mask_dir=os.path.join(data_root, "masks"),
         img_size=img_size,
         augment=True,
     )
-    n_val   = max(1, int(len(ds) * val_split))
-    n_train = len(ds) - n_val
-    train_ds, val_ds = torch.utils.data.random_split(ds, [n_train, n_val])
-    # Disable augmentation for val
-    val_ds.dataset.augment = False
+    val_full = RetinalDataset(
+        image_dir=os.path.join(data_root, "images"),
+        mask_dir=os.path.join(data_root, "masks"),
+        img_size=img_size,
+        augment=False,
+    )
+
+    n_total = len(train_full)
+    n_val   = max(1, int(n_total * val_split))
+    n_train = n_total - n_val
+
+    # Reproducible split into disjoint train/val index sets.
+    perm      = torch.randperm(n_total, generator=torch.Generator().manual_seed(42)).tolist()
+    train_idx = perm[:n_train]
+    val_idx   = perm[n_train:]
+
+    train_ds = torch.utils.data.Subset(train_full, train_idx)  # augmented
+    val_ds   = torch.utils.data.Subset(val_full,   val_idx)    # not augmented
 
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=0, pin_memory=False)
     val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=False)

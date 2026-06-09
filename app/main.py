@@ -79,14 +79,16 @@ def preprocess(pil_image: Image.Image) -> torch.Tensor:
 # ---------------------------------------------------------------------------
 
 def run_baseline(image_tensor: torch.Tensor) -> torch.Tensor:
+    """Return a vessel probability map [1, 1, H, W] in [0, 1]."""
     with torch.no_grad():
         logits = model(image_tensor)
-    return (torch.sigmoid(logits) > 0.5).float()
+    return torch.sigmoid(logits)
 
 
 def run_ttt(image_tensor: torch.Tensor) -> torch.Tensor:
+    """Return a vessel probability map [1, 1, H, W] in [0, 1] after TTT."""
     logits = test_time_adapt(model, image_tensor, n_steps=TTT_STEPS, lr=TTT_LR)
-    return (torch.sigmoid(logits) > 0.5).float()
+    return torch.sigmoid(logits)
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +96,7 @@ def run_ttt(image_tensor: torch.Tensor) -> torch.Tensor:
 # ---------------------------------------------------------------------------
 EPS = 1e-7
 
-def compute_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
+def compute_metrics(pred: np.ndarray, gt: np.ndarray, prob: np.ndarray = None) -> dict:
     from sklearn.metrics import roc_auc_score
     tp = np.sum((pred == 1) & (gt == 1))
     tn = np.sum((pred == 0) & (gt == 0))
@@ -107,8 +109,11 @@ def compute_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
     sensitivity = round(float((tp + EPS) / (tp + fn + EPS)), 4)
     specificity = round(float((tn + EPS) / (tn + fp + EPS)), 4)
 
+    # AUC must come from continuous scores; fall back to the binary mask only
+    # if no probability map was supplied (which yields a degenerate value).
+    auc_scores = prob if prob is not None else pred.astype(float)
     try:
-        auc = round(roc_auc_score(gt.astype(int), pred.astype(float)), 4)
+        auc = round(roc_auc_score(gt.astype(int), auc_scores), 4)
     except ValueError:
         auc = None
 
@@ -179,21 +184,33 @@ def predict():
         except Exception:
             return jsonify({"error": "Invalid mask file"}), 400
 
-    # --- Run inference ---
-    baseline_mask = run_baseline(img_tensor)
-    ttt_mask      = run_ttt(img_tensor)
+    # --- Run inference (probability maps in [0, 1]) ---
+    baseline_prob = run_baseline(img_tensor)
+    ttt_prob      = run_ttt(img_tensor)
+    baseline_mask = (baseline_prob > 0.5).float()
+    ttt_mask      = (ttt_prob > 0.5).float()
 
     # --- Metrics ---
     baseline_metrics = None
     ttt_metrics      = None
     if gt_np is not None:
-        def mask_to_np(t):
+        def to_flat(t, nearest=True):
             arr = t.squeeze().cpu().numpy()
             pil = Image.fromarray((arr * 255).astype(np.uint8))
-            pil = pil.resize((IMG_SIZE, IMG_SIZE), Image.NEAREST)
-            return (np.array(pil) > 127).astype(np.float32).ravel()
-        baseline_metrics = compute_metrics(mask_to_np(baseline_mask), gt_np)
-        ttt_metrics      = compute_metrics(mask_to_np(ttt_mask),      gt_np)
+            pil = pil.resize((IMG_SIZE, IMG_SIZE),
+                             Image.NEAREST if nearest else Image.BILINEAR)
+            return np.array(pil).astype(np.float32).ravel()
+
+        def mask_to_np(t):
+            return (to_flat(t) > 127).astype(np.float32)
+
+        def prob_to_np(t):
+            return to_flat(t, nearest=False) / 255.0
+
+        baseline_metrics = compute_metrics(
+            mask_to_np(baseline_mask), gt_np, prob=prob_to_np(baseline_prob))
+        ttt_metrics = compute_metrics(
+            mask_to_np(ttt_mask), gt_np, prob=prob_to_np(ttt_prob))
 
     return jsonify({
         "original_image":   image_to_b64(pil_img),

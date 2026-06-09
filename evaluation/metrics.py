@@ -45,19 +45,25 @@ def iou_score(logits: torch.Tensor, targets: torch.Tensor, threshold: float = 0.
 # Full evaluation over a dataset
 # ---------------------------------------------------------------------------
 
-def evaluate(preds_list, masks_list):
+def evaluate(probs_list, masks_list, threshold: float = 0.5):
     """
     Compute all metrics given lists of prediction and mask tensors.
 
     Args:
-        preds_list: list of [B, 1, H, W] binary prediction tensors (0/1).
+        probs_list: list of [B, 1, H, W] tensors of predicted vessel
+                    probabilities in [0, 1]. Counting metrics threshold these
+                    at `threshold`; AUC-ROC uses the continuous scores directly.
+                    (Passing already-binarized 0/1 tensors still yields correct
+                    counting metrics, but AUC-ROC will be degenerate.)
         masks_list: list of [B, 1, H, W] binary ground truth tensors.
+        threshold:  Probability cutoff for the binary counting metrics.
 
     Returns:
         dict with keys: dice, iou, accuracy, sensitivity, specificity, auc_roc
     """
-    all_preds  = torch.cat(preds_list, dim=0).cpu().numpy().ravel()
+    all_probs  = torch.cat(probs_list, dim=0).cpu().numpy().ravel()
     all_masks  = torch.cat(masks_list, dim=0).cpu().numpy().ravel()
+    all_preds  = (all_probs > threshold).astype(np.float32)
 
     tp = np.sum((all_preds == 1) & (all_masks == 1))
     tn = np.sum((all_preds == 0) & (all_masks == 0))
@@ -71,7 +77,8 @@ def evaluate(preds_list, masks_list):
     specificity = (tn + EPS) / (tn + fp + EPS)
 
     try:
-        auc = roc_auc_score(all_masks.astype(int), all_preds.astype(float))
+        # AUC must be computed from continuous scores, not the thresholded mask.
+        auc = roc_auc_score(all_masks.astype(int), all_probs.astype(float))
     except ValueError:
         auc = float("nan")
 

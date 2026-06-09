@@ -115,18 +115,22 @@ Test image → 4 rotations → rotation loss → update BN params → segment �
 
 ## Results
 
-Model trained on DRIVE (20 images), evaluated on three unseen datasets.  
-Best TTT hyperparameters (found via sweep on STARE): **lr = 1e-6, steps = 5**.
+Model trained on DRIVE (20 images, **with data augmentation**), evaluated on three unseen
+datasets. In-domain DRIVE validation Dice: **0.654**.
+Best TTT hyperparameters (found via sweep on STARE): **lr = 1e-6, steps = 5**, adapting
+**BatchNorm affine parameters only**. AUC-ROC is computed from continuous probabilities.
 
 ### Baseline vs TTT (Dice / AUC-ROC)
 
-| Dataset | Baseline Dice | TTT Dice | Δ | Baseline AUC | Notes |
-|---------|---------------|----------|---|--------------|-------|
-| STARE (20) | 0.4187 | 0.4207 | +0.0020 | 0.6574 | moderate shift |
-| CHASE (28) | 0.0332 | 0.0338 | +0.0006 | 0.5079 | severe shift |
-| HRF (45)   | 0.4402 | 0.4454 | +0.0052 | 0.6727 | moderate shift |
+| Dataset | Baseline Dice | TTT Dice | Δ | Baseline AUC | TTT AUC |
+|---------|---------------|----------|---|--------------|---------|
+| STARE (20) | 0.5349 | 0.5544 | +0.0195 | 0.8850 | 0.8985 |
+| CHASE (28) | 0.3923 | 0.4195 | +0.0272 | 0.8031 | 0.8151 |
+| HRF (45)   | 0.5501 | 0.5526 | +0.0025 | 0.8977 | 0.9004 |
 
-Specificity stays >0.97 everywhere — the model rarely paints background as vessel.
+Rotation-based TTT improves Dice on **every** target domain, with the largest gains on the two
+datasets that shift most from DRIVE (STARE, CHASE). Specificity stays >0.96 everywhere — the
+model rarely paints background as vessel.
 
 ### Ablation: TTA vs TTT, and how much to adapt
 
@@ -135,56 +139,61 @@ rotation-based **TTT** adapting different parameter subsets (BN affine / encoder
 
 | Dataset | Baseline | TTA | TTT-BN | TTT-Enc | TTT-Full |
 |---------|----------|-----|--------|---------|----------|
-| STARE | 0.4187 | **0.4342** (+0.0155) | 0.4207 | 0.4206 | 0.4206 |
-| CHASE | 0.0332 | 0.0216 (**−0.0116**) | 0.0338 | 0.0339 | 0.0339 |
-| HRF   | 0.4402 | **0.4662** (+0.0260) | 0.4454 | 0.4461 | 0.4461 |
+| STARE | 0.5349 | 0.5396 (+0.0047) | **0.5544 (+0.0195)** | 0.5527 | 0.5527 |
+| CHASE | 0.3923 | 0.4114 (+0.0191) | **0.4195 (+0.0272)** | 0.4190 | 0.4190 |
+| HRF   | 0.5501 | **0.5540 (+0.0039)** | 0.5526 (+0.0025) | 0.5526 | 0.5526 |
 
 Two clear findings:
-- **TTA beats TTT by ~3–5×** on STARE and HRF, but **catastrophically hurts CHASE** (−0.0116).
-- **Adapting more parameters does not help**: BN ≈ Encoder ≈ Full. The rotation auxiliary task
-  simply does not carry enough signal to reshape the segmentation decision boundary.
+- **TTT-BN is the best adaptation strategy** on the two harder shifts (STARE, CHASE), beating the
+  label-free TTA ensemble. On HRF — already close to the training distribution — every method is
+  within ±0.002 and the choice is immaterial.
+- **Adapting BatchNorm only beats adapting more**: TTT-BN ≥ TTT-Enc = TTT-Full everywhere.
+  Unlocking the encoder or the whole network never helps and slightly hurts. The rotation signal
+  is best spent re-estimating feature statistics, not reshaping the decision boundary.
 
-### Domain-gap analysis (why CHASE fails)
+### Domain-gap analysis (why CHASE is hardest)
 
 | Dataset | Mean brightness | Green-channel mean | Baseline Dice |
 |---------|-----------------|--------------------|----------------|
-| DRIVE (train) | ~88 | — | — |
-| STARE | ~85 | ~85 | 0.4187 |
-| HRF   | ~80 | ~50 | 0.4402 |
-| CHASE | **~53** | **~40** | **0.0332** |
+| DRIVE (train) | ~79 | ~69 | — (val 0.654) |
+| STARE | ~88 | ~85 | 0.5349 |
+| HRF   | ~80 | ~50 | 0.5501 |
+| CHASE | **~53** | **~41** | **0.3923** |
 
-CHASE images are ~40% darker than the DRIVE training distribution. This intensity shift —
-not vessel morphology — is the dominant cause of the near-total failure, and it explains why
-ensembling (TTA) makes CHASE *worse*: it averages confident-but-wrong predictions.
+CHASE is still the hardest target — its images are ~33% darker than DRIVE and have the lowest
+green-channel mean — and it has the lowest baseline Dice. But with a properly trained model the
+gap is **no longer catastrophic** (0.39, not the 0.03 seen when training without augmentation),
+and TTT closes part of it (+0.027).
 
-### Intensity correction (CLAHE) — the decisive experiment
+### Intensity correction (CLAHE) — testing the domain-gap hypothesis
 
-Part 5 tests the domain-gap hypothesis directly: apply CLAHE normalization to each test set
-before inference. If the gap is intensity-driven, correcting it should rescue CHASE.
+Part 5 applies CLAHE normalization to each test set before inference. If a residual intensity
+gap dominated, correcting it should still raise Dice.
 
 | Dataset | Baseline (orig) | TTA (orig) | Baseline (CLAHE) | TTA (CLAHE) |
 |---------|-----------------|------------|------------------|-------------|
-| STARE | 0.4187 | 0.4342 | 0.4706 | **0.4993** |
-| CHASE | 0.0332 | 0.0216 | 0.3571 | **0.3781** |
-| HRF   | 0.4402 | 0.4662 | 0.4363 | 0.4520 |
+| STARE | 0.5349 | 0.5396 | 0.4582 | 0.4561 |
+| CHASE | 0.3923 | 0.4114 | 0.3908 | 0.3963 |
+| HRF   | 0.5501 | 0.5540 | 0.3779 | 0.3668 |
 
-**This is the key result of the project:**
-- **CHASE Dice jumps 0.0332 → 0.3571 with CLAHE — a ~10× improvement** from a single
-  preprocessing step, confirming the collapse was an *intensity* problem, not a vessel-structure one.
-- CLAHE also **flips TTA on CHASE from harmful (−0.0116) to helpful (+0.021)** — exactly the
-  predicted mechanism: once the distribution matches, ensembling works again.
-- STARE improves too (0.419 → 0.471). **HRF (already bright) barely changes** — the correct
-  control, showing CLAHE only helps when an intensity gap actually exists.
+**Once the model is trained properly, CLAHE no longer helps — and usually hurts.** CLAHE
+uniformly raises sensitivity (e.g. HRF 0.636 → 0.882) but collapses specificity (0.944 → 0.767),
+so net Dice falls on the well-matched sets (STARE, HRF) and is only roughly neutral on CHASE —
+the single most intensity-shifted set, where the recall gain just balances the precision loss.
+Intensity normalization is therefore **not** a prerequisite for adaptation here; it was only
+beneficial in earlier runs *because the model was undertrained*.
 
 ### Key Observations
-- Rotation-based **TTT gives only marginal gains** (+0.0006 to +0.0052 Dice) and is dominated by
-  much simpler **TTA** when source and target distributions are similar (STARE, HRF).
-- **TTA fails catastrophically under large appearance shift** (CHASE), confirming that ensembling
-  cannot compensate for a distribution the model never learned.
-- **More adaptation ≠ better**: BN-only, encoder, and full-network TTT are statistically identical.
-- The CHASE collapse is explained by a ~40% brightness deficit — and **CLAHE intensity
-  normalization recovers ~10× the Dice (0.033 → 0.357)**, making intensity correction a
-  *prerequisite* to test-time adaptation rather than an afterthought.
+- **Rotation-based TTT (BN-only) is the most effective adaptation method**: it improves Dice on
+  all three unseen datasets and beats the TTA ensemble on the two largest domain shifts
+  (STARE +0.0195, CHASE +0.0272).
+- **Adapt BatchNorm, not the whole network**: BN-only ≥ encoder = full-network TTT everywhere.
+- **CHASE is hard, not hopeless**: the catastrophic failure seen in earlier runs was an artifact of
+  training without augmentation; with it fixed, baseline Dice rises ~12× (0.033 → 0.392).
+- **CLAHE trades specificity for sensitivity** and lowers Dice for a properly trained model; it
+  only helped when an intensity gap dominated *and* the model was otherwise weak.
+- **Methodology matters**: enabling data augmentation lifted in-domain Dice 0.15 → 0.65, and
+  computing AUC-ROC from probabilities (not thresholded masks) yields realistic 0.80–0.90 scores.
 
 ---
 

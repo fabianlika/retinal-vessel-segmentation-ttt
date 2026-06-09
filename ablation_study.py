@@ -56,28 +56,28 @@ TTT_STEPS = 5
 @torch.no_grad()
 def run_baseline(model, loader, device):
     model.eval()
-    preds, masks = [], []
+    probs, masks = [], []
     for imgs, msks in loader:
         imgs = imgs.to(device)
         logits = model(imgs)
-        preds.append((torch.sigmoid(logits) > 0.5).float().cpu())
+        probs.append(torch.sigmoid(logits).cpu())
         masks.append(msks)
-    return preds, masks
+    return probs, masks
 
 
 def run_ttt(model, loader, device, mode):
-    preds, masks = [], []
+    probs, masks = [], []
     for imgs, msks in loader:
         imgs = imgs.to(device)
-        batch_preds = []
+        batch_probs = []
         for i in range(imgs.size(0)):
             single = imgs[i].unsqueeze(0)
             logits = test_time_adapt(model, single, n_steps=TTT_STEPS,
                                      lr=TTT_LR, adapt_mode=mode)
-            batch_preds.append((torch.sigmoid(logits) > 0.5).float().cpu())
-        preds.append(torch.cat(batch_preds, dim=0))
+            batch_probs.append(torch.sigmoid(logits).cpu())
+        probs.append(torch.cat(batch_probs, dim=0))
         masks.append(msks)
-    return preds, masks
+    return probs, masks
 
 
 def run_tta(model, loader, device):

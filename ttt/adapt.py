@@ -111,7 +111,8 @@ def run_ttt_inference(
     Run TTT on every image in loader.
 
     Yields:
-        (seg_pred, mask) tuples where seg_pred is a binary mask [1, 1, H, W].
+        (seg_prob, mask) tuples where seg_prob is a probability map [1, 1, H, W]
+        in [0, 1] (apply a 0.5 threshold for a binary mask).
     """
     model.to(device)
 
@@ -119,17 +120,16 @@ def run_ttt_inference(
         imgs  = imgs.to(device)
         masks = masks.to(device)
 
-        batch_preds = []
+        batch_probs = []
         for i in range(imgs.size(0)):
             single_img = imgs[i].unsqueeze(0)           # [1, C, H, W]
             logits = test_time_adapt(
                 model, single_img, n_steps=n_steps, lr=lr
             )
-            pred = (torch.sigmoid(logits) > 0.5).float()
-            batch_preds.append(pred)
+            batch_probs.append(torch.sigmoid(logits))
 
-        preds = torch.cat(batch_preds, dim=0)
-        yield preds, masks
+        probs = torch.cat(batch_probs, dim=0)
+        yield probs, masks
 
         if (batch_idx + 1) % 5 == 0:
             print(f"  TTT progress: {batch_idx + 1}/{len(loader)} batches done", flush=True)
@@ -141,7 +141,8 @@ def run_ttt_inference(
 
 @torch.no_grad()
 def run_baseline_inference(model, loader, device):
-    """Standard inference without TTT. Yields (pred, mask) pairs."""
+    """Standard inference without TTT. Yields (prob, mask) pairs where prob is
+    a probability map in [0, 1]."""
     model.eval()
     model.to(device)
 
@@ -149,8 +150,8 @@ def run_baseline_inference(model, loader, device):
         imgs  = imgs.to(device)
         masks = masks.to(device)
         logits = model(imgs)
-        preds  = (torch.sigmoid(logits) > 0.5).float()
-        yield preds, masks
+        probs  = torch.sigmoid(logits)
+        yield probs, masks
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +166,8 @@ def run_tta_inference(model, loader, device):
     ensembling. Used as a simple baseline to compare against TTT.
 
     Yields:
-        (seg_pred, mask) where seg_pred is binary [B, 1, H, W].
+        (seg_prob, mask) where seg_prob is the averaged probability map
+        [B, 1, H, W] in [0, 1] (apply a 0.5 threshold for a binary mask).
     """
     model.eval()
     model.to(device)
@@ -194,8 +196,7 @@ def run_tta_inference(model, loader, device):
             prob_sum   += deaug_fn(aug_probs)
 
         avg_probs = prob_sum / len(augmentations)
-        preds = (avg_probs > 0.5).float()
-        yield preds, masks
+        yield avg_probs, masks
 
 
 # ---------------------------------------------------------------------------
