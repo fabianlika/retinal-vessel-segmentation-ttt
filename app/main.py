@@ -60,11 +60,13 @@ print("Model loaded.")
 # ---------------------------------------------------------------------------
 # Image preprocessing
 # ---------------------------------------------------------------------------
+# Match the training/eval preprocessing exactly: resize to IMG_SIZE and scale to
+# [0, 1] with ToTensor. (No ImageNet normalization — the model was trained on raw
+# [0, 1] inputs, so adding it here would shift the input distribution and degrade
+# the predictions relative to the reported metrics.)
 TRANSFORM = T.Compose([
     T.Resize((IMG_SIZE, IMG_SIZE)),
     T.ToTensor(),
-    T.Normalize(mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]),
 ])
 
 
